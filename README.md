@@ -2,7 +2,8 @@
 
 ## Overview and Purpose
 
-For our project, we are creating a live streaming platform called Gander. The purpose of this project is to provide a source of entertainment to users and create a community for those with similar interests. In it, users will be able to watch live streams from other users, either gaming or in real life. Alternatively, users can stream themselves on the platform. If a user wants to go live, they can click the “Go Live” button when they are logged in. They will then be presented with a dashboard, so that they can choose their stream's title, category and thumbnail (if they wish to, otherwise a default thumbnail will be chosen). Users who are watching a live stream can interact with other viewers and the streamer through a chat feature. If a user likes a streamer enough, they can subscribe to them using the Stripe API on a monthly basis, for as many months as they wish.
+Gander is a live streaming platform created as a 3rd year team software project as part of UCC's Computer Science degree. It provides a source of entertainment and a community for users with similar interests. Users can watch live streams from other users, whether gaming or IRL, or broadcast their own content. By clicking the "Go Live" button, a logged-in user is presented with a dashboard where they can set their stream's title, category, and thumbnail. Users watching a live stream can interact with other viewers and the streamer through a live chat. Users can also subscribe to their favourite streamers via the Stripe API on a monthly basis.
+
 ![Screenshot 2025-03-03 123446](https://github.com/user-attachments/assets/a23c2974-9500-492d-be07-91161606e805)
 
 ![Screenshot 2025-03-03 125748](https://github.com/user-attachments/assets/ab2092a3-c599-4a90-a616-f08faa4c76ba)
@@ -17,13 +18,13 @@ The platform implements three-tier access control:
 
 2. **Regular Access** (Authenticated Users)
    - All features available to non-authenticated users
-   - Ability to donate to streamers through Stripe integration
+   - Donate to streamers through Stripe integration
    - Interact with streams through comments
    - Follow other users
-   - Option to become a content creator and start streaming
+   - Become a content creator and start streaming
 
 3. **Admin Access**
-   - Complete platform management capabilities
+   - Full platform management capabilities
    - Content moderation tools
    - User account management
    - System configuration controls
@@ -51,28 +52,39 @@ The platform implements three-tier access control:
 - Docker for containerization and deployment
 - Docker Compose for multi-container orchestration
 - Nginx for reverse proxy and RTMP streaming server
-- Uses a microservices architecture
-
-## Future Development
-
-While our current focus is on the web platform, we've architected the system with potential mobile expansion in mind, particularly through React Native for Android development.
+- Microservices architecture
 
 ## Development
 
-This project is actively maintained on GitHub with all team members contributing through version control. We follow collaborative development practices with regular code reviews and feature branches.
+This project was maintained on GitHub, with all team members contributing through version control. The team followed collaborative development practices including regular code reviews and feature branches.
 
-## Running the Current Implementation of the Project
+## Future Development
 
-The current implementation can be run, in development mode, using the following method:
+Development on Gander has concluded. Potential extensions that were not implemented include:
 
-- Pre-requisites:
-  - Docker
-  - Docker Compose
-  - Node.js & npm
+- **User Profiles**: Customizable profiles showcasing streaming history, followers, and personal information.
+- **Enhanced Chat Features**: Emojis, chat moderation tools, and the ability to pin messages during live streams.
+- **Mobile Application**: A mobile app built with React Native to allow users to watch and stream on the go.
+- **Monetization Options**: Additional revenue streams for content creators, such as merchandise sales or one-time donations.
+- **Analytics Dashboard**: A dashboard for streamers to track viewership, engagement metrics, and revenue over time.
 
-1. Replace `.env.example` files with `.env` and fill in the required environment variables
-2. Launch Docker containers using either:
-   - `docker-compose up --build` in terminal
-   - Right click within the editor within `docker-compose.yml` and select `Compose Up`
-   This will start the frontend, backend, and database services
-3. Access the frontend at `localhost:8080` in your browser
+## Running the Project
+
+Pre-requisites:
+
+- [Docker](https://docs.docker.com/get-docker/) (includes Docker Compose)
+- Node.js & npm (optional, for local frontend development)
+
+Steps:
+
+1. Rename the following `.env.example` files to `.env` and fill in the required values:
+   - `frontend/.env.example` — React frontend variables
+   - `web_server/.env.example` — Flask backend variables
+2. Start all services with Docker Compose:
+
+   ```bash
+   docker compose up --build
+   ```
+
+   > **Note:** Older versions of Docker use `docker-compose` (with a hyphen) instead of `docker compose` (with a space).
+3. Access the frontend at `localhost:8080` in your browser. Note that the terminal output from Vite will show `localhost:5173` — this is the internal container port. Nginx exposes the application on port `8080`.
