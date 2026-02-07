@@ -1,7 +1,11 @@
-from database.database import Database
+"""User profile management, following, and subscription utilities."""
+
 from typing import Optional, List
 from datetime import datetime, timedelta
+
+from database.database import Database
 from dateutil import parser
+
 
 def get_user_id(username: str) -> Optional[int]:
     """
@@ -9,8 +13,8 @@ def get_user_id(username: str) -> Optional[int]:
     """
     with Database() as db:
         data = db.fetchone("""
-            SELECT user_id 
-            FROM users 
+            SELECT user_id
+            FROM users
             WHERE username = ?
         """, (username,))
     return data['user_id'] if data else None
@@ -21,7 +25,7 @@ def get_username(user_id: str) -> Optional[str]:
     """
     with Database() as db:
         data = db.fetchone("""
-            SELECT username 
+            SELECT username
             FROM users
             WHERE user_id = ?
         """, (user_id,))
@@ -40,15 +44,16 @@ def update_bio(user_id: int, bio: str):
 
 def has_password(email: str):
     """
-    Returns if account associated with this email has password, i.e is account from Google OAuth
+    Returns if account associated with this email has password,
+    i.e is account from Google OAuth
     """
     with Database() as db:
         data = db.fetchone("""
                 SELECT password
                 FROM users
-                WHERE email = ?           
+                WHERE email = ?
         """, (email,))
-    return False if data["password"] == None else True
+    return data["password"] is not None
 
 def get_session_info_email(email: str) -> dict:
     """
@@ -61,15 +66,15 @@ def get_session_info_email(email: str) -> dict:
             WHERE email = ?
         """, (email,))
         return session_info
-    
+
 def is_user_partner(user_id: int) -> bool:
     """
     Returns True if user is a partner, else False
     """
     with Database() as db:
         data = db.fetchone("""
-            SELECT is_partnered 
-            FROM users 
+            SELECT is_partnered
+            FROM users
             WHERE user_id = ?
         """, (user_id,))
     return bool(data)
@@ -79,12 +84,12 @@ def is_subscribed(user_id: int, subscribed_to_id: int) -> bool:
     with Database() as db:
         return bool(db.fetchone(
             """
-            SELECT 1 
-            FROM subscribes 
-            WHERE user_id = ? 
-            AND subscribed_id = ? 
+            SELECT 1
+            FROM subscribes
+            WHERE user_id = ?
+            AND subscribed_id = ?
             AND expires > ?;
-            """, 
+            """,
             (user_id, subscribed_to_id, datetime.now())
         ))
 
@@ -94,9 +99,9 @@ def is_following(user_id: int, followed_id: int) -> bool:
     """
     with Database() as db:
         result = db.fetchone("""
-            SELECT 1 
-            FROM follows 
-            WHERE user_id = ? 
+            SELECT 1
+            FROM follows
+            WHERE user_id = ?
             AND followed_id = ?
         """, (user_id, followed_id))
     return bool(result)
@@ -107,7 +112,7 @@ def follow(user_id: int, followed_id: int):
     """
     if is_following(user_id, followed_id):
         return {"success": False, "error": "Already following user"}, 400
-    
+
     with Database() as db:
         db.execute("""
         INSERT INTO follows (user_id, followed_id)
@@ -135,9 +140,9 @@ def is_following_category(user_id: int, category_id: str):
     """
     with Database() as db:
         result = db.fetchone("""
-            SELECT 1 
-            FROM followed_categories 
-            WHERE user_id = ? 
+            SELECT 1
+            FROM followed_categories
+            WHERE user_id = ?
             AND category_id = ?
         """, (user_id, category_id))
     return bool(result)
@@ -148,7 +153,7 @@ def follow_category(user_id: int, category_id: str):
     """
     if is_following_category(user_id, category_id):
         return {"success": False, "error": "Already following category"}, 400
-    
+
     with Database() as db:
         db.execute("""
         INSERT INTO followed_categories (user_id, category_id)
@@ -163,7 +168,7 @@ def unfollow_category(user_id: int, category_id: str):
     """
     if not is_following_category(user_id, category_id):
         return {"success": False, "error": "Not following category"}, 400
-    
+
     with Database() as db:
         db.execute("""
             DELETE FROM followed_categories
@@ -179,8 +184,8 @@ def subscribe(user_id: int, streamer_id: int):
     # If user is already subscribed then extend the expiration date else create a new entry
     with Database() as db:
         existing = db.fetchone("""
-            SELECT expires 
-            FROM subscribes 
+            SELECT expires
+            FROM subscribes
             WHERE user_id = ? AND subscribed_id = ?
         """, (user_id, streamer_id))
         if existing:
@@ -188,7 +193,7 @@ def subscribe(user_id: int, streamer_id: int):
                 UPDATE subscribes SET expires = expires + ?
                 WHERE user_id = ? AND subscribed_id = ?
             """, (timedelta(days=30), user_id, streamer_id))
-        else:   
+        else:
             db.execute("""
                 INSERT INTO subscribes
                 (user_id, subscribed_id, since, expires)
@@ -212,10 +217,10 @@ def subscription_expiration(user_id: int, subscribed_id: int) -> int:
     """
     with Database() as db:
         data = db.fetchone("""
-            SELECT expires 
-            FROM subscribes 
-            WHERE user_id = ? 
-            AND subscribed_id = ? 
+            SELECT expires
+            FROM subscribes
+            WHERE user_id = ?
+            AND subscribed_id = ?
             AND expires > ?
         """, (user_id, subscribed_id, datetime.now()))
 
@@ -227,13 +232,14 @@ def subscription_expiration(user_id: int, subscribed_id: int) -> int:
     return 0
 
 def get_email(user_id: int) -> Optional[str]:
+    """Returns the email address for a given user_id."""
     with Database() as db:
         email = db.fetchone("""
             SELECT email
             FROM users
             WHERE user_id = ?
         """, (user_id,))
-    
+
     return email["email"] if email else None
 
 def get_followed_streamers(user_id: int) -> Optional[List[dict]]:

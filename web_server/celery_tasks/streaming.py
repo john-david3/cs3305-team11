@@ -1,11 +1,14 @@
-from celery import Celery, shared_task, Task
-from datetime import datetime
-from celery_tasks.preferences import user_preferences
-from utils.stream_utils import generate_thumbnail, get_streamer_live_status, get_custom_thumbnail_status, remove_hls_files, get_video_duration
-from time import sleep
-from os import listdir, remove
-from utils.path_manager import PathManager
+"""Async tasks for stream thumbnail updates, VOD creation, and image conversion."""
+
 import subprocess
+from os import listdir
+
+from celery import shared_task
+from utils.stream_utils import (
+    generate_thumbnail, get_streamer_live_status,
+    get_custom_thumbnail_status, remove_hls_files, get_video_duration
+)
+from utils.path_manager import PathManager
 
 path_manager = PathManager()
 
@@ -16,10 +19,13 @@ def update_thumbnail(user_id, stream_file, thumbnail_file, sleep_time, second_ca
     """
 
     # Check if stream is still live and custom thumbnail has not been set
-    if get_streamer_live_status(user_id)['is_live'] and not get_custom_thumbnail_status(user_id)['custom_thumbnail']:
+    if (get_streamer_live_status(user_id)['is_live']
+            and not get_custom_thumbnail_status(user_id)['custom_thumbnail']):
         print("Updating thumbnail...")
         generate_thumbnail(stream_file, thumbnail_file)
-        update_thumbnail.apply_async((user_id, stream_file, thumbnail_file, sleep_time, second_capture), countdown=sleep_time)
+        update_thumbnail.apply_async(
+            (user_id, stream_file, thumbnail_file, sleep_time, second_capture),
+            countdown=sleep_time)
     else:
         print(f"Stopping thumbnail updates for stream of {user_id}")
 
@@ -34,12 +40,12 @@ def combine_ts_stream(stream_path, vods_path, vod_file_name, thumbnail_file) -> 
     ts_files.sort()
 
     # Create temp file listing all ts files
-    with open(f"{stream_path}/list.txt", "w") as f:
+    with open(f"{stream_path}/list.txt", "w", encoding="utf-8") as f:
         for ts_file in ts_files:
             f.write(f"file '{ts_file}'\n")
-    
+
     # Concatenate all ts files into a single vod
-    
+
     vod_command = [
         "ffmpeg",
         "-f",
@@ -53,7 +59,7 @@ def combine_ts_stream(stream_path, vods_path, vod_file_name, thumbnail_file) -> 
         vod_file_path
     ]
 
-    subprocess.run(vod_command)
+    subprocess.run(vod_command, check=True)
 
     # Remove HLS files, even if user is not streaming
     remove_hls_files(stream_path)
@@ -78,4 +84,4 @@ def convert_image_to_png(image_path, png_path):
         png_path
     ]
 
-    subprocess.run(image_command)
+    subprocess.run(image_command, check=True)

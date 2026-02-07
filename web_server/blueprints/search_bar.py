@@ -1,3 +1,5 @@
+"""Search bar blueprint for querying categories, users, streams, and VODs."""
+
 from flask import Blueprint, jsonify, request
 from database.database import Database
 from utils.utils import sanitize
@@ -20,7 +22,7 @@ def rank_results(query, result):
     # Assign a score based on the level of the match
     if query in result:
         return 0
-    elif all(c in charset for c in query):
+    if all(c in charset for c in query):
         return 1
     return 2
 
@@ -50,7 +52,7 @@ def search_results():
             res_dict.append(c)
     categories = sorted(res_dict, key=lambda d: d["score"])
     categories = categories[:4]
-    
+
     # 3 users
     res_dict = []
     users = db.fetchall("SELECT user_id, username, is_live FROM users")
@@ -63,7 +65,7 @@ def search_results():
     users = sorted(res_dict, key=lambda d: d["score"])
     users = users[:4]
 
-    # 3 streams    
+    # 3 streams
     res_dict = []
     streams = db.fetchall("""SELECT s.user_id, s.title, s.num_viewers, c.category_name, u.username
                     FROM streams AS s
@@ -71,7 +73,7 @@ def search_results():
                     INNER JOIN users AS u ON s.user_id = u.user_id
                     INNER JOIN categories AS c ON s.category_id = c.category_id
                     """)
-    
+
     for s in streams:
         key = s.get("title")
         score = rank_results(query.lower(), key.lower())
@@ -83,7 +85,7 @@ def search_results():
 
     # 3 VODs
     res_dict = []
-    vods = db.fetchall("""SELECT v.vod_id, v.title, u.user_id, u.username 
+    vods = db.fetchall("""SELECT v.vod_id, v.title, u.user_id, u.username
                        FROM vods as v JOIN users as u
                        ON v.user_id = u.user_id""")
     for v in vods:
@@ -98,5 +100,5 @@ def search_results():
     db.close_connection()
 
     print(query, streams, users, categories, vods, flush=True)
-    
+
     return jsonify({"streams": streams, "categories": categories, "users": users, "vods": vods})

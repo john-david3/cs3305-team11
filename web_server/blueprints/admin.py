@@ -1,6 +1,8 @@
+"""Admin blueprint for user management operations."""
+
 from flask import Blueprint, session
 from utils.utils import sanitize
-from utils.admin_utils import *
+from utils.admin_utils import check_if_admin, check_if_user_exists, ban_user
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -18,7 +20,7 @@ def admin_delete_user(banned_user):
     # Check if the user is an admin
     username = session.get("username")
     is_admin = check_if_admin(username)
-    
+
     # Check if the user exists
     user_exists = check_if_user_exists(banned_user)
 

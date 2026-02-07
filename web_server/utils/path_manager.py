@@ -1,8 +1,11 @@
-"""Description: This file contains the PathManager class which is responsible for managing the paths of the stream data."""
+"""File system path management for user streams, VODs, and profile pictures."""
 
 import os
 
+
 class PathManager():
+    """Manages paths for user stream data, VODs, and profile pictures."""
+
     def __init__(self) -> None:
         self.root_path = "user_data"
         self.vod_directory_name = "vods"
@@ -26,7 +29,7 @@ class PathManager():
         self._create_directory(os.path.join(self.root_path, username))
         vods_path = self.get_vods_path(username)
         stream_path = self.get_stream_path(username)
-        
+
         self._create_directory(vods_path)
         self._create_directory(stream_path)
 
@@ -39,25 +42,33 @@ class PathManager():
             os.rmdir(user_path)
 
     def get_user_path(self, username):
+        """Returns the base path for a user's data directory."""
         return os.path.join(self.root_path, username)
 
     def get_vods_path(self, username):
+        """Returns the path to a user's VODs directory."""
         return os.path.join(self.root_path, username, self.vod_directory_name)
-    
+
     def get_stream_path(self, username):
+        """Returns the path to a user's stream directory."""
         return os.path.join(self.root_path, username, self.stream_directory_name)
-    
+
     def get_stream_file_path(self, username):
+        """Returns the path to a user's stream index file."""
         return os.path.join(self.get_stream_path(username), "index.m3u8")
-    
+
     def get_current_stream_thumbnail_file_path(self, username):
+        """Returns the path to a user's current stream thumbnail."""
         return os.path.join(self.get_stream_path(username), "index.png")
-    
+
     def get_vod_file_path(self, username, vod_id):
+        """Returns the path to a specific VOD file."""
         return os.path.join(self.get_vods_path(username), f"{vod_id}.mp4")
-    
+
     def get_vod_thumbnail_file_path(self, username, vod_id):
+        """Returns the path to a specific VOD thumbnail."""
         return os.path.join(self.get_vods_path(username), f"{vod_id}.png")
-    
+
     def get_profile_picture_file_path(self, username):
+        """Returns the path to a user's profile picture."""
         return os.path.join(self.root_path, username, self.profile_picture_name)

@@ -1,17 +1,28 @@
+"""User profile and account management blueprint."""
+
 from flask import Blueprint, jsonify, session, request
-from utils.user_utils import *
-from utils.auth import *
+from utils.user_utils import (
+    get_user_id, get_user, update_bio, is_subscribed,
+    subscription_expiration, delete_subscription, is_following,
+    follow, unfollow, get_followed_streamers, get_followed_categories,
+    is_following_category, follow_category, unfollow_category,
+    has_password, get_session_info_email
+)
+from database.database import Database
+from utils.auth import verify_token, reset_password
 from utils.utils import get_category_id
 from blueprints.middleware import login_required
-from utils.email import send_email, forgot_password_body, newsletter_conf, remove_from_newsletter, email_exists
+from utils.email import (
+    send_email, forgot_password_body, newsletter_conf,
+    remove_from_newsletter, email_exists
+)
 from utils.path_manager import PathManager
-from celery_tasks.streaming import convert_image_to_png
 import redis
 
 from PIL import Image
 
-redis_url = "redis://redis:6379/1"
-r = redis.from_url(redis_url, decode_responses=True)
+REDIS_URL = "redis://redis:6379/1"
+r = redis.from_url(REDIS_URL, decode_responses=True)
 
 user_bp = Blueprint("user", __name__)
 
@@ -24,7 +35,7 @@ def user_data(username: str):
     """
     user_id = get_user_id(username)
     if not user_id:
-        jsonify({"error": "User not found from username"}), 404
+        return jsonify({"error": "User not found from username"}), 404
     data = get_user(user_id)
     return jsonify(data)
 
@@ -48,11 +59,11 @@ def user_profile_picture_save():
     """
     username = session.get("username")
     thumbnail_path = path_manager.get_profile_picture_file_path(username)
-    
+
     # Check if the post request has the file part
     if 'image' not in request.files:
         return jsonify({"error": "No image found in request"}), 400
-    
+
     # Fetch image, convert to png, and save
     image = Image.open(request.files['image'])
     image.convert('RGB')
@@ -73,7 +84,7 @@ def user_change_bio():
         bio = data.get("bio")
         update_bio(user_id, bio)
         return jsonify({"status": "Success"}), 200
-    except Exception as e:
+    except (ValueError, TypeError, KeyError) as e:
         return jsonify({"error": str(e)}), 400
 
 ## Subscription Routes
@@ -186,7 +197,7 @@ def user_login_status():
     """
     username = session.get("username")
     user_id = session.get("user_id")
-    return jsonify({'status': username is not None, 
+    return jsonify({'status': username is not None,
                     'username': username,
                     'user_id': user_id})
 
@@ -198,13 +209,14 @@ def user_forgot_password(email):
     exists = email_exists(email)
     password = has_password(email)
     # Checks if password exists and is not a Google OAuth account
-    if(exists and password):
+    if exists and password:
         send_email(email, lambda: forgot_password_body(email))
         return email
-    return jsonify({"error":"Invalid email or not found"}), 404
+    return jsonify({"error": "Invalid email or not found"}), 404
 
 @user_bp.route("/send_newsletter/<string:email>", methods=["POST"])
 def send_newsletter(email):
+    """Sends a newsletter confirmation email."""
     send_email(email, lambda: newsletter_conf(email))
     return email
 
@@ -226,6 +238,7 @@ def user_reset_password(token, new_password):
 
 @user_bp.route("/user/unsubscribe/<string:token>", methods=["POST"])
 def unsubscribe(token):
+    """Unsubscribes a user from the newsletter."""
     salt = r.get(token)
     if salt:
         r.delete(token)

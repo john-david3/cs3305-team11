@@ -1,3 +1,8 @@
+"""Authentication blueprint for user signup, login, and logout."""
+
+import logging
+from secrets import token_hex
+
 from flask import Blueprint, session, request, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_cors import cross_origin
@@ -5,18 +10,21 @@ from database.database import Database
 from blueprints.middleware import login_required
 from utils.user_utils import get_user_id
 from utils.utils import sanitize
-from secrets import token_hex
 from utils.path_manager import PathManager
 
 auth_bp = Blueprint("auth", __name__)
 
 path_manager = PathManager()
 
+logger = logging.getLogger(__name__)
+
+
 @auth_bp.route("/signup", methods=["POST"])
 @cross_origin(supports_credentials=True)
 def signup():
     """
-    Route that allows a user to sign up by providing a `username`, `email` and `password`.
+    Route that allows a user to sign up by providing a
+    `username`, `email` and `password`.
     """
     # ensure a JSON request is made to contact this route
     if not request.is_json:
@@ -30,19 +38,21 @@ def signup():
 
     # Validation - ensure all fields exist, users cannot have an empty field
     if not all([username, email, password]):
-        error_fields = get_error_fields([username, email, password]) #!←← find the error_fields, to highlight them in red to the user on the frontend
+        error_fields = get_error_fields(
+            [username, email, password]
+        )
         return jsonify({
             "account_created": False,
             "error_fields": error_fields,
             "message": "Missing required fields"
         }), 400
-    
+
     # Sanitize the inputs - helps to prevent SQL injection
     try:
         username = sanitize(username, "username")
         email = sanitize(email, "email")
         password = sanitize(password, "password")
-    except ValueError as e:
+    except ValueError:
         error_fields = get_error_fields([username, email, password])
         return jsonify({
             "account_created": False,
@@ -81,7 +91,7 @@ def signup():
 
         # Create new user once input is validated
         db.execute(
-            """INSERT INTO users 
+            """INSERT INTO users
                (username, password, email, stream_key)
                VALUES (?, ?, ?, ?)""",
             (
@@ -100,16 +110,16 @@ def signup():
             "message": "Account created successfully"
         }), 201
 
-    except Exception as e:
-        print(f"Error during signup: {e}")  # Log the error
+    except (ValueError, TypeError, KeyError) as exc:
+        logger.error("Error during signup: %s", exc)
         return jsonify({
             "account_created": False,
-            "message": "Server error occurred: " + str(e)
+            "message": "Server error occurred: " + str(exc)
         }), 500
 
     finally:
         db.close_connection()
-        
+
 
 @auth_bp.route("/login", methods=["POST"])
 @cross_origin(supports_credentials=True)
@@ -127,24 +137,24 @@ def login():
     username = data.get('username')
     password = data.get('password')
 
-   # Validation - ensure all fields exist, users cannot have an empty field
+    # Validation - ensure all fields exist, users cannot have an empty field
     if not all([username, password]):
         return jsonify({
             "logged_in": False,
             "message": "Missing required fields"
         }), 400
-    
+
     # Sanitize the inputs - helps to prevent SQL injection
     try:
         username = sanitize(username, "username")
         password = sanitize(password, "password")
-    except ValueError as e:
+    except ValueError:
         return jsonify({
             "account_created": False,
             "error_fields": ["username", "password"],
             "message": "Invalid input received"
         }), 400
-    
+
     # Create a connection to the database
     db = Database()
 
@@ -169,7 +179,7 @@ def login():
                 "error_fields": ["username", "password"],
                 "message": "Invalid username or password"
             }), 401
-        
+
         # Add user directories for stream data in case they don't exist
         path_manager.create_user(username)
 
@@ -177,7 +187,10 @@ def login():
         session.clear()
         session["username"] = username
         session["user_id"] = get_user_id(username)
-        print(f"Logged in as {username}. session: {session.get('username')}. user_id: {session.get('user_id')}", flush=True)
+        logger.info(
+            "Logged in as %s. session: %s. user_id: %s",
+            username, session.get('username'), session.get('user_id')
+        )
 
         # User has been logged in, let frontend know that
         return jsonify({
@@ -186,8 +199,8 @@ def login():
             "username": username
         }), 200
 
-    except Exception as e:
-        print(f"Error during login: {e}")  # Log the error
+    except (ValueError, TypeError, KeyError) as exc:
+        logger.error("Error during login: %s", exc)
         return jsonify({
             "logged_in": False,
             "message": "Server error occurred"
@@ -202,31 +215,41 @@ def login():
 def logout() -> dict:
     """
     Log out and clear the users session.
-    
+
     If the user is currently streaming, end their stream first.
     Can only be accessed by a logged in user.
     """
-    from database.database import Database
     from utils.stream_utils import end_user_stream
-    
+
     # Check if user is currently streaming
     user_id = session.get("user_id")
     username = session.get("username")
-    
+
     with Database() as db:
-        is_streaming = db.fetchone("""SELECT is_live FROM users WHERE user_id = ?""", (user_id,))
-        
+        is_streaming = db.fetchone(
+            """SELECT is_live FROM users WHERE user_id = ?""",
+            (user_id,)
+        )
+
         if is_streaming and is_streaming.get("is_live") == 1:
             # Get the user's stream key
-            stream_key_info = db.fetchone("""SELECT stream_key FROM users WHERE user_id = ?""", (user_id,))
-            stream_key = stream_key_info.get("stream_key") if stream_key_info else None
-            
+            stream_key_info = db.fetchone(
+                """SELECT stream_key FROM users WHERE user_id = ?""",
+                (user_id,)
+            )
+            stream_key = (
+                stream_key_info.get("stream_key") if stream_key_info
+                else None
+            )
+
             if stream_key:
                 # End the stream
                 end_user_stream(stream_key, user_id, username)
     session.clear()
     return {"logged_in": False}
 
+
 def get_error_fields(values: list):
+    """Return field names for empty values."""
     fields = ["username", "email", "password"]
     return [fields[i] for i, v in enumerate(values) if not v]

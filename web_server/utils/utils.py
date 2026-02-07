@@ -1,6 +1,10 @@
-from database.database import Database
+"""Input sanitization and validation utilities."""
+
 from typing import Optional, List
 from re import match
+
+from database.database import Database
+
 
 def get_all_categories() -> Optional[List[dict]]:
     """
@@ -8,7 +12,7 @@ def get_all_categories() -> Optional[List[dict]]:
     """
     with Database() as db:
         all_categories = db.fetchall("SELECT * FROM categories")
-    
+
     return all_categories
 
 def get_all_tags() -> Optional[List[dict]]:
@@ -17,7 +21,7 @@ def get_all_tags() -> Optional[List[dict]]:
     """
     with Database() as db:
         all_tags = db.fetchall("SELECT * FROM tags")
-    
+
     return all_tags
 
 def get_most_popular_category() -> Optional[List[dict]]:
@@ -34,7 +38,7 @@ def get_most_popular_category() -> Optional[List[dict]]:
             ORDER BY SUM(streams.num_viewers) DESC
             LIMIT 1;
         """)
-    
+
     return category
 
 def get_category_id(category_name: str):
@@ -53,7 +57,7 @@ def get_category_id(category_name: str):
 def sanitize(user_input: str, input_type="default") -> str:
     """
     Sanitizes user input based on the specified input type.
-    
+
     `input_type`: The type of input to sanitize (e.g., 'username', 'email', 'password').
     """
     # Strip leading and trailing whitespace
@@ -84,10 +88,10 @@ def sanitize(user_input: str, input_type="default") -> str:
     }
 
     # Get the validation rules for the specified type
-    r = rules.get(input_type)
-    if not r or \
-    not (r["min_length"] <= len(sanitised_input) <= r["max_length"]) or \
-    not match(r["pattern"], sanitised_input):
+    rule = rules.get(input_type)
+    if (not rule
+            or not (rule["min_length"] <= len(sanitised_input) <= rule["max_length"])
+            or not match(rule["pattern"], sanitised_input)):
         raise ValueError("Unaccepted character or length in input")
 
     return sanitised_input

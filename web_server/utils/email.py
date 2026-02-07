@@ -1,16 +1,18 @@
+"""Email sending utilities for password reset, account confirmation, and newsletters."""
+
 import smtplib
 from email.mime.text import MIMEText
-
 from os import getenv
+from secrets import token_hex
+
 from dotenv import load_dotenv
 from utils.auth import generate_token
-from secrets import token_hex
 from .user_utils import get_session_info_email
 import redis
 from database.database import Database
 
-redis_url = "redis://redis:6379/1"
-r = redis.from_url(redis_url, decode_responses=True)
+REDIS_URL = "redis://redis:6379/1"
+r = redis.from_url(REDIS_URL, decode_responses=True)
 
 load_dotenv()
 
@@ -23,31 +25,31 @@ def send_email(email, func) -> None:
     """
 
     # Setup the sender email details
-    SMTP_SERVER = "smtp.gmail.com"
-    SMTP_PORT = 587
-    SMTP_EMAIL = getenv("EMAIL")
-    SMTP_PASSWORD = getenv("EMAIL_PASSWORD")
+    smtp_server = "smtp.gmail.com"
+    smtp_port = 587
+    smtp_email = getenv("EMAIL")
+    smtp_password = getenv("EMAIL_PASSWORD")
 
     # Setup up the receiver details
     body, subject = func()
 
     msg = MIMEText(body, "html")
     msg["Subject"] = subject
-    msg["From"] = SMTP_EMAIL
+    msg["From"] = smtp_email
     msg["To"] = email
 
     # Send the email using smtplib
-    with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as smtp:
+    with smtplib.SMTP(smtp_server, smtp_port) as smtp:
         try:
             smtp.starttls()     # TLS handshake to start the connection
-            smtp.login(SMTP_EMAIL, SMTP_PASSWORD)
+            smtp.login(smtp_email, smtp_password)
             smtp.ehlo()
             smtp.send_message(msg)
-        
+
         except TimeoutError:
             print("Server timed out", flush=True)
 
-        except Exception as e:
+        except smtplib.SMTPException as e:
             print("Error: ", e, flush=True)
 
 def forgot_password_body(email) -> str:
@@ -57,7 +59,7 @@ def forgot_password_body(email) -> str:
     salt = token_hex(32)
 
     token = generate_token(email, salt)
-    token += "R3sET" 
+    token += "R3sET"
     r.setex(token, 3600, salt)
     username = (get_session_info_email(email))["username"]
 
@@ -77,7 +79,7 @@ def forgot_password_body(email) -> str:
     </head>
     <body>
         <div class="container">
-            <h1>Gander</h1>   
+            <h1>Gander</h1>
             <h2>Password Reset Request</h2>
             <p>Click the button below to reset your password for your account {username}. This link is valid for 1 hour.</p>
             <a href="{full_url}" class="btn">Reset Password</a>
@@ -116,7 +118,7 @@ def confirm_account_creation_body(email) -> str:
     </head>
     <body>
         <div class="container">
-            <h1>Gander</h1>   
+            <h1>Gander</h1>
             <h2>Confirm Account Creation</h2>
             <p>Click the button below to create your account. This link is valid for 1 hour.</p>
             <a href="{full_url}" class="btn">Create Account</a>
@@ -154,7 +156,7 @@ def newsletter_conf(email):
     </head>
     <body>
         <div class="container">
-            <h1>Gander</h1>   
+            <h1>Gander</h1>
             <h2>Welcome to the Official Gander Newsletter!</h2>
             <p>If you are receiving this email, it means that you have been officially added to the Monthly Gander newsletter.</p>
             <p>In this newsletter, you will receive updates about: your favourite streamers; important Gander updates; and more!</p>
@@ -169,7 +171,7 @@ def newsletter_conf(email):
         user_exists = db.fetchone("""
                                 SELECT *
                                 FROM newsletter
-                                WHERE email = ?;""", 
+                                WHERE email = ?;""",
                                 (email,))
     print(user_exists, flush=True)
 
@@ -190,7 +192,7 @@ def add_to_newsletter(email):
                 INSERT INTO newsletter (email)
                 VALUES (?);
                 """, (email,))
-    
+
 def remove_from_newsletter(email):
     """
     Remove a person from the newsletter database
@@ -202,7 +204,7 @@ def remove_from_newsletter(email):
                 DELETE FROM newsletter
                 WHERE email = ?;
                 """, (email,))
-        
+
 def email_exists(email):
     """
     Returns whether email exists within database
@@ -210,6 +212,6 @@ def email_exists(email):
     with Database() as db:
         data = db.fetchone("""
                 SELECT * FROM users
-                WHERE email = ?         
+                WHERE email = ?
         """, (email,))
     return bool(data)
