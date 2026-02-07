@@ -1,7 +1,12 @@
+"""SQLite database connection management with context manager support."""
+
 import sqlite3
 import os
 
+
 class Database:
+    """Database wrapper providing connection management and query execution."""
+
     def __init__(self) -> None:
         self._db = os.path.join(os.path.abspath(os.path.dirname(__file__)), "app.db")
         self._conn = None
@@ -63,4 +68,6 @@ class Database:
         if not result:
             return []
         columns = [desc[0] for desc in self.cursor.description]
-        return [dict(zip(columns, row)) for row in result] if isinstance(result, list) else dict(zip(columns, result))
+        if isinstance(result, list):
+            return [dict(zip(columns, row)) for row in result]
+        return dict(zip(columns, result))

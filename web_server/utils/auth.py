@@ -1,13 +1,17 @@
+"""Token generation and verification for password resets."""
+
+from typing import Optional
+from os import getenv
+
 from database.database import Database
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
-from typing import Optional
 from dotenv import load_dotenv
-from os import getenv
 from werkzeug.security import generate_password_hash
 
 load_dotenv()
 
 serializer = URLSafeTimedSerializer(getenv("AUTH_SECRET_KEY"))
+
 def generate_token(email, salt_value) -> str:
     """
     Creates a token for password reset
@@ -19,7 +23,6 @@ def verify_token(token: str, salt_value) -> Optional[str]:
     """
     Given a token, verifies and decodes it into an email
     """
-    
     try:
         email = serializer.loads(token, salt=salt_value, max_age=3600)
         return email
@@ -38,7 +41,7 @@ def reset_password(new_password: str, email: str):
     """
     with Database() as db:
         db.execute("""
-            UPDATE users 
-            SET password = ? 
+            UPDATE users
+            SET password = ?
             WHERE email = ?
         """, (generate_password_hash(new_password), email))

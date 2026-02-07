@@ -1,3 +1,5 @@
+"""Celery app initialization with Flask."""
+
 from blueprints import create_app
 
 flask_app = create_app()

@@ -1,14 +1,17 @@
+"""Chat blueprint for WebSocket-based real-time messaging."""
+
+import json
+from datetime import datetime
+
 from flask import Blueprint, jsonify
 from database.database import Database
 from .socket import socketio
 from flask_socketio import emit, join_room, leave_room
-from datetime import datetime
-from utils.user_utils import get_user_id, is_subscribed
+from utils.user_utils import is_subscribed
 import redis
-import json
 
-redis_url = "redis://redis:6379/1"
-r = redis.from_url(redis_url, decode_responses=True)
+REDIS_URL = "redis://redis:6379/1"
+r = redis.from_url(REDIS_URL, decode_responses=True)
 chat_bp = Blueprint("chat", __name__)
 
 @socketio.on("connect")
@@ -32,7 +35,7 @@ def handle_join(data) -> None:
         join_room(stream_id)
         num_viewers = len(list(socketio.server.manager.get_participants("/", stream_id)))
         update_viewers(stream_id, num_viewers)
-        emit("status", 
+        emit("status",
             {
                 "message": f"Welcome to the chat, stream_id: {stream_id}",
                 "num_viewers": num_viewers
@@ -53,7 +56,7 @@ def handle_leave(data) -> None:
             remove_favourability_entry(str(data["user_id"]), str(stream_id))
         num_viewers = len(list(socketio.server.manager.get_participants("/", stream_id)))
         update_viewers(stream_id, num_viewers)
-        emit("status", 
+        emit("status",
             {
                 "message": f"Welcome to the chat, stream_id: {stream_id}",
                 "num_viewers": num_viewers
@@ -78,10 +81,10 @@ def get_past_chat(stream_id: int):
     all_chats = db.fetchall("""
                             SELECT user_id, username, message, time_sent, is_subscribed
                             FROM (
-                                SELECT 
+                                SELECT
                                     u.user_id,
-                                    u.username, 
-                                    c.message, 
+                                    u.username,
+                                    c.message,
                                     c.time_sent,
                                     CASE
                                         WHEN s.user_id IS NOT NULL AND s.expires > CURRENT_TIMESTAMP THEN 1
@@ -101,8 +104,8 @@ def get_past_chat(stream_id: int):
 
     # Create JSON output of chat_history to pass through NGINX proxy
     chat_history = [{"chatter_id": chat["user_id"],
-                    "chatter_username": chat["username"], 
-                    "message": chat["message"], 
+                    "chatter_username": chat["username"],
+                    "message": chat["message"],
                     "time_sent": chat["time_sent"],
                     "is_subscribed": bool(chat["is_subscribed"])} for chat in all_chats]
     print(chat_history)
@@ -125,7 +128,13 @@ def send_chat(data) -> None:
 
     # Input validation - chatter is logged in, message is not empty, stream exists
     if not all([chatter_name, message, stream_id]):
-        emit("error", {"error": f"Unable to send a chat. The following info was given: chatter_name={chatter_name}, message={message}, stream_id={stream_id}"}, broadcast=False)
+        emit("error", {
+            "error": (
+                f"Unable to send a chat. The following info was given: "
+                f"chatter_name={chatter_name}, message={message}, "
+                f"stream_id={stream_id}"
+            )
+        }, broadcast=False)
         return
     subscribed = is_subscribed(chatter_id, stream_id)
     # Send the chat message to the client so it can be displayed
@@ -161,9 +170,8 @@ def update_viewers(user_id, num_viewers):
                 SET num_viewers = ?
                 WHERE user_id = ?;
                 """, (num_viewers, user_id))
-    db.close_connection
-    
-#TODO: Make sure that users entry within Redis is removed if they disconnect from socket
+    db.close_connection()
+
 def add_favourability_entry(user_id, stream_id):
     """
     Adds entry to Redis that user is watching a streamer
@@ -183,7 +191,7 @@ def add_favourability_entry(user_id, stream_id):
     else:
         # Creates new entry for user and stream
         current_viewers[user_id] = [stream_id]
-    
+
     r.hset("current_viewers", "viewers", json.dumps(current_viewers))
 
 def remove_favourability_entry(user_id, stream_id):
@@ -202,7 +210,7 @@ def remove_favourability_entry(user_id, stream_id):
     if user_id in current_viewers:
         # Removes specific stream from user
         current_viewers[user_id] = [stream for stream in current_viewers[user_id] if stream != stream_id]
-        
+
         # If user is no longer watching any streams
         if not current_viewers[user_id]:
             del current_viewers[user_id]

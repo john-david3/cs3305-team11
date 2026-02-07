@@ -1,7 +1,10 @@
-from flask import redirect, g, session
-from functools import wraps
+"""Authentication middleware and error handler registration."""
+
 import logging
+from functools import wraps
 from os import getenv
+
+from flask import redirect, g, session
 from dotenv import load_dotenv
 from database.database import Database
 
@@ -57,5 +60,5 @@ def register_error_handlers(app):
     for code, message in error_responses.items():
         @app.errorhandler(code)
         def handle_error(error, message=message, code=code):
-            logging.error(f"Error {code}: {str(error)}")
+            logging.error("Error %d: %s", code, str(error))
             return {"error": message}, code

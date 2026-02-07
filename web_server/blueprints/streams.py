@@ -1,15 +1,24 @@
+"""Stream and VOD management blueprint."""
+
+import json
+from datetime import datetime
+
 from flask import Blueprint, session, jsonify, request, redirect
-from utils.stream_utils import *
-from utils.recommendation_utils import *
+from utils.stream_utils import (
+    get_category_id, get_current_stream_data, get_streamer_live_status,
+    get_latest_vod, get_vod, get_user_vods, end_user_stream
+)
+from utils.recommendation_utils import (
+    get_user_preferred_category, get_highest_view_streams,
+    get_streams_based_on_category, get_highest_view_categories,
+    get_user_category_recommendations, get_followed_categories_recommendations
+)
 from utils.user_utils import get_user_id
 from blueprints.middleware import login_required
 from database.database import Database
-from datetime import datetime
-from celery_tasks.streaming import update_thumbnail, combine_ts_stream
-from dateutil import parser
+from celery_tasks.streaming import update_thumbnail
 from utils.path_manager import PathManager
 from PIL import Image
-import json
 
 stream_bp = Blueprint("stream", __name__)
 
@@ -28,12 +37,12 @@ def popular_streams(no_streams) -> list[dict]:
     Returns a list of streams live now with the highest viewers
     """
 
-    # Limit the number of streams to MAX_STREAMS
-    MAX_STREAMS = 100
+    # Limit the number of streams to max_streams
+    max_streams = 100
     if no_streams < 1:
         return jsonify([])
-    elif no_streams > MAX_STREAMS:
-        no_streams = MAX_STREAMS
+    if no_streams > max_streams:
+        no_streams = max_streams
 
     # Get the highest viewed streams
     streams = get_highest_view_streams(no_streams)
@@ -101,7 +110,7 @@ def popular_categories(no_categories=4, offset=0) -> list[dict]:
     # Limit the number of categories to 100
     if no_categories < 1:
         return jsonify([])
-    elif no_categories > 100:
+    if no_categories > 100:
         no_categories = 100
 
     category_data = get_highest_view_categories(no_categories, offset)
@@ -135,7 +144,8 @@ def following_categories_streams():
 @stream_bp.route('/user/<string:username>/status')
 def user_live_status(username):
     """
-    Returns a streamer's status, if they are live or not and their most recent stream (as a vod) (their current stream if live)
+    Returns a streamer's status, if they are live or not and their
+    most recent stream (as a vod) (their current stream if live)
     Returns:
     {
         "is_live": bool,
@@ -146,7 +156,7 @@ def user_live_status(username):
     user_id = get_user_id(username)
 
     # Check if streamer is live and get their most recent vod
-    is_live = True if get_streamer_live_status(user_id)['is_live'] else False
+    is_live = bool(get_streamer_live_status(user_id)['is_live'])
     most_recent_vod = get_latest_vod(user_id)
 
     # If there is no most recent vod, set it to None
@@ -171,25 +181,24 @@ def user_live_status_direct(username):
     """
 
     user_id = get_user_id(username)
-    is_live = True if get_streamer_live_status(user_id)['is_live'] else False
+    is_live = bool(get_streamer_live_status(user_id)['is_live'])
 
     if is_live:
         return 'ok', 200
-    else:
-        return 'not live', 404
+    return 'not live', 404
 
 
 # VOD Routes
 @stream_bp.route('/vods/<int:vod_id>')
-def vod(vod_id):
+def single_vod(vod_id):
     """
     Returns details about a specific vod
     """
-    vod = get_vod(vod_id)
-    return jsonify(vod)
+    vod_data = get_vod(vod_id)
+    return jsonify(vod_data)
 
 @stream_bp.route('/vods/<string:username>')
-def vods(username):
+def user_vods(username):
     """
     Returns a JSON of all the vods of a streamer
     Returns:
@@ -204,11 +213,11 @@ def vods(username):
             "views": int
         }
     ]
-    
+
     """
     user_id = get_user_id(username)
-    vods = get_user_vods(user_id)
-    return jsonify(vods)
+    vod_list = get_user_vods(user_id)
+    return jsonify(vod_list)
 
 @stream_bp.route('/vods/all')
 def get_all_vods():
@@ -216,9 +225,14 @@ def get_all_vods():
     Returns data of all VODs by all streamers in a JSON-compatible format
     """
     with Database() as db:
-        vods = db.fetchall("""SELECT vods.*, username, category_name FROM vods JOIN users ON vods.user_id = users.user_id JOIN categories ON vods.category_id = categories.category_id;""")
-        
-    return jsonify(vods)
+        all_vods = db.fetchall(
+            """SELECT vods.*, username, category_name
+               FROM vods
+               JOIN users ON vods.user_id = users.user_id
+               JOIN categories ON vods.category_id = categories.category_id;"""
+        )
+
+    return jsonify(all_vods)
 
 # RTMP Server Routes
 
@@ -232,9 +246,10 @@ def init_stream():
 
     with Database() as db:
         # Check if valid stream key and user is allowed to stream
-        user_info = db.fetchone("""SELECT user_id, username, is_live 
-                                FROM users 
-                                WHERE stream_key = ?""", (stream_key,))
+        user_info = db.fetchone(
+            """SELECT user_id, username, is_live
+               FROM users
+               WHERE stream_key = ?""", (stream_key,))
 
         # No user found from stream key
         if not user_info:
@@ -280,25 +295,27 @@ def publish_stream():
     username = None
 
     with Database() as db:
-        user_info = db.fetchone("""SELECT user_id, username, is_live
-                                FROM users 
-                                WHERE stream_key = ?""", (stream_key,))
+        user_info = db.fetchone(
+            """SELECT user_id, username, is_live
+               FROM users
+               WHERE stream_key = ?""", (stream_key,))
 
         if not user_info or user_info.get("is_live"):
             print(
-                "Unauthorized. No user found from Stream key or user is already streaming.", flush=True)
+                "Unauthorized. No user found from Stream key "
+                "or user is already streaming.", flush=True)
             return "Unauthorized", 403
 
         user_id = user_info.get("user_id")
         username = user_info.get("username")
 
         # Insert stream into database
-        db.execute("""INSERT INTO streams (user_id, title, start_time, num_viewers, category_id)
-                    VALUES (?, ?, ?, ?, ?)""", (user_id,
-                                                stream_title,
-                                                datetime.now(),
-                                                0,
-                                                get_category_id(stream_category)))
+        db.execute(
+            """INSERT INTO streams
+               (user_id, title, start_time, num_viewers, category_id)
+               VALUES (?, ?, ?, ?, ?)""",
+            (user_id, stream_title, datetime.now(), 0,
+             get_category_id(stream_category)))
 
         # Set user as streaming
         db.execute("""UPDATE users SET is_live = 1 WHERE user_id = ?""",
@@ -306,10 +323,12 @@ def publish_stream():
 
     # Update thumbnail periodically only if a custom thumbnail is not provided
     if not stream_thumbnail:
-        update_thumbnail.apply_async((user_id,
-                           path_manager.get_stream_file_path(username),
-                           path_manager.get_current_stream_thumbnail_file_path(username),
-                           THUMBNAIL_GENERATION_INTERVAL), countdown=10)
+        update_thumbnail.apply_async(
+            (user_id,
+             path_manager.get_stream_file_path(username),
+             path_manager.get_current_stream_thumbnail_file_path(username),
+             THUMBNAIL_GENERATION_INTERVAL),
+            countdown=10)
 
     return "OK", 200
 
@@ -332,31 +351,36 @@ def update_stream():
 
 
     with Database() as db:
-        user_info = db.fetchone("""SELECT user_id, username, is_live 
-                                FROM users 
-                                WHERE stream_key = ?""", (stream_key,))
+        user_info = db.fetchone(
+            """SELECT user_id, username, is_live
+               FROM users
+               WHERE stream_key = ?""", (stream_key,))
 
         if not user_info or not user_info.get("is_live"):
             print(
-                "Unauthorized - No user found from stream key or user is not streaming", flush=True)
+                "Unauthorized - No user found from stream key "
+                "or user is not streaming", flush=True)
             return "Unauthorized", 403
 
         user_id = user_info.get("user_id")
         username = user_info.get("username")
 
         # TODO: Add update to thumbnail here
-        db.execute("""UPDATE streams 
-                   SET title = ?, category_id = ?
-                   WHERE user_id = ?""", (stream_title, get_category_id(stream_category), user_id))
-        
+        db.execute(
+            """UPDATE streams
+               SET title = ?, category_id = ?
+               WHERE user_id = ?""",
+            (stream_title, get_category_id(stream_category), user_id))
+
         print("GOT: " + stream_thumbnail, flush=True)
-        
+
         if stream_thumbnail:
             # Set custom thumbnail status to true
-            db.execute("""UPDATE streams
-                        SET custom_thumbnail = ?
-                        WHERE user_id = ?""", (True, user_id))
-            
+            db.execute(
+                """UPDATE streams
+                   SET custom_thumbnail = ?
+                   WHERE user_id = ?""", (True, user_id))
+
             # Get thumbnail path
             thumbnail_path = path_manager.get_current_stream_thumbnail_file_path(username)
 
@@ -390,26 +414,27 @@ def end_stream():
 
     # Get user info from stream key
     with Database() as db:
-        user_info = db.fetchone("""SELECT user_id, username
-                                FROM users 
-                                WHERE stream_key = ?""", (stream_key,))
-        
+        user_info = db.fetchone(
+            """SELECT user_id, username
+               FROM users
+               WHERE stream_key = ?""", (stream_key,))
+
         # Return unauthorized if no user found
         if not user_info:
             print("Unauthorized - No user found from stream key", flush=True)
             return "Unauthorized", 403
-            
+
         # Get user info
         user_id = user_info["user_id"]
         username = user_info["username"]
-    
+
     # End stream
     result, message = end_user_stream(stream_key, user_id, username)
-    
+
     # Return error if stream could not be ended
     if not result:
         print(f"Error ending stream: {message}", flush=True)
         return "Error ending stream", 500
-    
+
     print(f"Stream ended: {message}", flush=True)
     return "Stream ended", 200
