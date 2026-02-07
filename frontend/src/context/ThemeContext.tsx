@@ -17,11 +17,11 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
-  // Set default theme to dark
+  // Set default theme to light
 
   const [theme, setTheme] = useState<string>(() => {
     // If exist on user cache, use that instead
-    return localStorage.getItem("user-theme") || "dark";
+    return localStorage.getItem("user-theme") || "light";
   });
 
   useEffect(() => {

@@ -21,7 +21,7 @@ services:
     networks:
       - app_network
     env_file:
-      - .env
+      - web_server/.env
     environment:
       - FLASK_APP=blueprints.__init__
       - FLASK_ENV=production
@@ -39,7 +39,7 @@ services:
     environment:
       - VITE_API_URL=/api
     env_file:
-      - .env
+      - frontend/.env
     depends_on:
       - web_server
 
@@ -79,12 +79,10 @@ services:
   stripe-cli:
     image: stripe/stripe-cli
     container_name: stripe-cli
-    command: 
-      - listen
-      - --api-key
-      - ${STRIPE_SECRET_KEY}
-      - --forward-to
-      - http://web_server:5000/stripe/webhook
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - stripe listen --api-key $$STRIPE_SECRET_KEY --forward-to http://web_server:5000/stripe/webhook
     env_file:
       - web_server/.env
     networks:
