@@ -89,7 +89,7 @@ body[data-theme="light"] {
 
 body[data-theme="dark"] {
   /*Global Background Colour*/
-  background: linear-gradient(to top right, #737787, #0d1e55, #567419);
+  background: linear-gradient(to top right, #0f2058, #020f39, #89058d);
   --scrollbar-color: rgb(255, 255, 255);
   --scrollbar-hover: rgb(255, 255, 255);
 
